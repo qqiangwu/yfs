@@ -34,3 +34,18 @@
 ## 还未解决的Bug
 + server收到client ack时，会清除reply中的buffer，但此buffer现在可能正在被其他人使用。懒得改了
 + server收到client ack时，移动window，但实际上，仍然有可能有pending的重复请求在之后到来，此时，会直接返回给client atmostonce-error
+
+# Lab2
+## ExtentServer
+这就是一个BlockDevice啊。嗯，为了简单，现在也实现一个内存态的吧。精力主要集中在yfs，就当是存储计算分离好了。
+
+## Yfs
+基于extent server实现一个可靠的yfs还是挺难的。考虑以下几个问题
+
++ yfs执行一个操作，需要更新多个extent，在更新第一个extent成功后，extent server挂了，或者yfs挂了，怎么办？
+    + 实际上，并没有很好的解决方法，这是文件系统必须要面对的事情。实际的系统中，要么调整写的顺序，来降低风险；要么提供某种原子提交的机制
+    + 在目前的lab中，不需要考虑这个问题，还是挺幸福的
++ 多个线程并发访问一个yfs实例：当前lab中没有这个问题，这个问题相对下一个问题更加容易解决一些
++ 多个yfs并发访问一个extent server：这就意味着，yfs实例不能缓存extent。实际上，如果多个yfs实例并发访问的话，需要做并发控制，要么用CAS，要么用锁
+    + 目前的实验中没有这一问题
++ Lab中没有显式说明extent的大小，如果是BlockDevice抽象的话，extent大小应该是固定的。目前，为了简单，先实现为extent为变长的。则，每个文件与目录，都可以实现为一个extent。

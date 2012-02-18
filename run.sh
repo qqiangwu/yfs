@@ -1,40 +1,21 @@
 #! /bin/bash
 
-function test::cleanup() {
-    killall lock_server
-}
-
-function test::lock() {
-    trap test::cleanup EXIT TERM KILL
-
-    ./lock_server 3772 &
-    ./lock_tester 3772
-}
-
 case "$1" in
-    "server")
-        ./lock_server 3772
+    "start")
+        ./start.sh
         ;;
-    "demo")
-        ./lock_demo 3772
+    "stop")
+        ./stop.sh
         ;;
-    "locktest")
-        ./lock_tester 3772
+    "test-1")
+        ./test-lab-2-a.pl ./yfs1
+        ./stop.sh
         ;;
-    "test")
-        test::lock
-        ;;
-    "testlossy")
-        export RPC_LOSSY=5
-        test::lock
-        ;;
-    "rpctest")
-        ./rpc/rpctest "$2"
-        ;;
-    "kill")
-        killall lock_server
+    "test-2")
+        ./test-lab-2-b.pl ./yfs1 ./yfs2
+        ./stop.sh
         ;;
     *)
-        echo "Unknown command $@" >&2
+        echo "Unknown command %@" >&2
         ;;
 esac
