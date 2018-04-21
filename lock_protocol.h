@@ -17,4 +17,4 @@ class lock_protocol {
   };
 };
 
-#endif 
+#endif

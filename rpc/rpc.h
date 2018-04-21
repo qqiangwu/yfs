@@ -1,6 +1,8 @@
 #ifndef rpc_h
 #define rpc_h
 
+#include <sys/types.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <list>
@@ -70,7 +72,7 @@ class rpcc : public chanmgr {
 
 		std::map<int, caller *> calls_;
 		std::list<unsigned int> xid_rep_window_;
-                
+
                 struct request {
                     request() { clear(); }
                     void clear() { buf.clear(); xid = -1; }
@@ -99,10 +101,10 @@ class rpcc : public chanmgr {
 		void set_reachable(bool r) { reachable_ = r; }
 
 		void cancel();
-                
+
                 int islossy() { return lossytest_ > 0; }
 
-		int call1(unsigned int proc, 
+		int call1(unsigned int proc,
 				marshall &req, unmarshall &rep, TO to);
 
 		bool got_pdu(connection *c, char *b, int sz);
@@ -112,36 +114,36 @@ class rpcc : public chanmgr {
 			int call_m(unsigned int proc, marshall &req, R & r, TO to);
 
 		template<class R>
-			int call(unsigned int proc, R & r, TO to = to_max); 
+			int call(unsigned int proc, R & r, TO to = to_max);
 		template<class R, class A1>
-			int call(unsigned int proc, const A1 & a1, R & r, TO to = to_max); 
+			int call(unsigned int proc, const A1 & a1, R & r, TO to = to_max);
 		template<class R, class A1, class A2>
-			int call(unsigned int proc, const A1 & a1, const A2 & a2, R & r, 
-					TO to = to_max); 
+			int call(unsigned int proc, const A1 & a1, const A2 & a2, R & r,
+					TO to = to_max);
 		template<class R, class A1, class A2, class A3>
-			int call(unsigned int proc, const A1 & a1, const A2 & a2, const A3 & a3, 
-					R & r, TO to = to_max); 
+			int call(unsigned int proc, const A1 & a1, const A2 & a2, const A3 & a3,
+					R & r, TO to = to_max);
 		template<class R, class A1, class A2, class A3, class A4>
-			int call(unsigned int proc, const A1 & a1, const A2 & a2, const A3 & a3, 
+			int call(unsigned int proc, const A1 & a1, const A2 & a2, const A3 & a3,
 					const A4 & a4, R & r, TO to = to_max);
 		template<class R, class A1, class A2, class A3, class A4, class A5>
-			int call(unsigned int proc, const A1 & a1, const A2 & a2, const A3 & a3, 
-					const A4 & a4, const A5 & a5, R & r, TO to = to_max); 
+			int call(unsigned int proc, const A1 & a1, const A2 & a2, const A3 & a3,
+					const A4 & a4, const A5 & a5, R & r, TO to = to_max);
 		template<class R, class A1, class A2, class A3, class A4, class A5,
 			class A6>
-				int call(unsigned int proc, const A1 & a1, const A2 & a2, const A3 & a3, 
+				int call(unsigned int proc, const A1 & a1, const A2 & a2, const A3 & a3,
 						const A4 & a4, const A5 & a5, const A6 & a6,
-						R & r, TO to = to_max); 
-		template<class R, class A1, class A2, class A3, class A4, class A5, 
+						R & r, TO to = to_max);
+		template<class R, class A1, class A2, class A3, class A4, class A5,
 			class A6, class A7>
-				int call(unsigned int proc, const A1 & a1, const A2 & a2, const A3 & a3, 
+				int call(unsigned int proc, const A1 & a1, const A2 & a2, const A3 & a3,
 						const A4 & a4, const A5 & a5, const A6 &a6, const A7 &a7,
-						R & r, TO to = to_max); 
+						R & r, TO to = to_max);
 
 };
 
-template<class R> int 
-rpcc::call_m(unsigned int proc, marshall &req, R & r, TO to) 
+template<class R> int
+rpcc::call_m(unsigned int proc, marshall &req, R & r, TO to)
 {
 	unmarshall u;
 	int intret = call1(proc, req, u, to);
@@ -158,14 +160,14 @@ rpcc::call_m(unsigned int proc, marshall &req, R & r, TO to)
 }
 
 template<class R> int
-rpcc::call(unsigned int proc, R & r, TO to) 
+rpcc::call(unsigned int proc, R & r, TO to)
 {
 	marshall m;
 	return call_m(proc, m, r, to);
 }
 
 template<class R, class A1> int
-rpcc::call(unsigned int proc, const A1 & a1, R & r, TO to) 
+rpcc::call(unsigned int proc, const A1 & a1, R & r, TO to)
 {
 	marshall m;
 	m << a1;
@@ -174,7 +176,7 @@ rpcc::call(unsigned int proc, const A1 & a1, R & r, TO to)
 
 template<class R, class A1, class A2> int
 rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
-		R & r, TO to) 
+		R & r, TO to)
 {
 	marshall m;
 	m << a1;
@@ -184,7 +186,7 @@ rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
 
 template<class R, class A1, class A2, class A3> int
 rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
-		const A3 & a3, R & r, TO to) 
+		const A3 & a3, R & r, TO to)
 {
 	marshall m;
 	m << a1;
@@ -195,7 +197,7 @@ rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
 
 template<class R, class A1, class A2, class A3, class A4> int
 rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
-		const A3 & a3, const A4 & a4, R & r, TO to) 
+		const A3 & a3, const A4 & a4, R & r, TO to)
 {
 	marshall m;
 	m << a1;
@@ -207,7 +209,7 @@ rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
 
 template<class R, class A1, class A2, class A3, class A4, class A5> int
 rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
-		const A3 & a3, const A4 & a4, const A5 & a5, R & r, TO to) 
+		const A3 & a3, const A4 & a4, const A5 & a5, R & r, TO to)
 {
 	marshall m;
 	m << a1;
@@ -221,8 +223,8 @@ rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
 template<class R, class A1, class A2, class A3, class A4, class A5,
 	class A6> int
 rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
-		const A3 & a3, const A4 & a4, const A5 & a5, 
-		const A6 & a6, R & r, TO to) 
+		const A3 & a3, const A4 & a4, const A5 & a5,
+		const A6 & a6, R & r, TO to)
 {
 	marshall m;
 	m << a1;
@@ -237,9 +239,9 @@ rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
 template<class R, class A1, class A2, class A3, class A4, class A5,
 	class A6, class A7> int
 rpcc::call(unsigned int proc, const A1 & a1, const A2 & a2,
-		const A3 & a3, const A4 & a4, const A5 & a5, 
+		const A3 & a3, const A4 & a4, const A5 & a5,
 		const A6 & a6, const A7 & a7,
-		R & r, TO to) 
+		R & r, TO to)
 {
 	marshall m;
 	m << a1;
@@ -297,9 +299,13 @@ class rpcs : public chanmgr {
 	void free_reply_window(void);
 	void add_reply(unsigned int clt_nonce, unsigned int xid, char *b, int sz);
 
-	rpcstate_t checkduplicate_and_update(unsigned int clt_nonce, 
+	rpcstate_t checkduplicate_and_update(unsigned int clt_nonce,
 			unsigned int xid, unsigned int rep_xid,
 			char **b, int *sz);
+
+    void remove_received_reply(unsigned int clt_nonce, unsigned int xid);
+    rpcstate_t try_retrieve_old(unsigned int clt_nonce, unsigned int xid);
+    void append_new_call(unsigned int clt_nonce, unsigned int xid);
 
 	void updatestat(unsigned int proc);
 
@@ -311,7 +317,7 @@ class rpcs : public chanmgr {
 	int curr_counts_;
 	std::map<int, int> counts_;
 
-	int lossytest_; 
+	int lossytest_;
 	bool reachable_;
 
 	// map proc # to function
@@ -354,27 +360,27 @@ class rpcs : public chanmgr {
 	template<class S, class A1, class R>
 		void reg(unsigned int proc, S*, int (S::*meth)(const A1 a1, R & r));
 	template<class S, class A1, class A2, class R>
-		void reg(unsigned int proc, S*, int (S::*meth)(const A1 a1, const A2, 
+		void reg(unsigned int proc, S*, int (S::*meth)(const A1 a1, const A2,
 					R & r));
 	template<class S, class A1, class A2, class A3, class R>
-		void reg(unsigned int proc, S*, int (S::*meth)(const A1, const A2, 
+		void reg(unsigned int proc, S*, int (S::*meth)(const A1, const A2,
 					const A3, R & r));
 	template<class S, class A1, class A2, class A3, class A4, class R>
-		void reg(unsigned int proc, S*, int (S::*meth)(const A1, const A2, 
+		void reg(unsigned int proc, S*, int (S::*meth)(const A1, const A2,
 					const A3, const A4, R & r));
 	template<class S, class A1, class A2, class A3, class A4, class A5, class R>
-		void reg(unsigned int proc, S*, int (S::*meth)(const A1, const A2, 
-					const A3, const A4, const A5, 
+		void reg(unsigned int proc, S*, int (S::*meth)(const A1, const A2,
+					const A3, const A4, const A5,
 					R & r));
 	template<class S, class A1, class A2, class A3, class A4, class A5, class A6,
 		class R>
-			void reg(unsigned int proc, S*, int (S::*meth)(const A1, const A2, 
-						const A3, const A4, const A5, 
+			void reg(unsigned int proc, S*, int (S::*meth)(const A1, const A2,
+						const A3, const A4, const A5,
 						const A6, R & r));
 	template<class S, class A1, class A2, class A3, class A4, class A5, class A6,
 		class A7, class R>
-			void reg(unsigned int proc, S*, int (S::*meth)(const A1, const A2, 
-						const A3, const A4, const A5, 
+			void reg(unsigned int proc, S*, int (S::*meth)(const A1, const A2,
+						const A3, const A4, const A5,
 						const A6, const A7,
 						R & r));
 };
@@ -404,7 +410,7 @@ rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, R & r))
 }
 
 template<class S, class A1, class A2, class R> void
-rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2, 
+rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
 			R & r))
 {
 	class h1 : public handler {
@@ -431,7 +437,7 @@ rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
 }
 
 template<class S, class A1, class A2, class A3, class R> void
-rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2, 
+rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
 			const A3 a3, R & r))
 {
 	class h1 : public handler {
@@ -460,8 +466,8 @@ rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
 }
 
 template<class S, class A1, class A2, class A3, class A4, class R> void
-rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2, 
-			const A3 a3, const A4 a4, 
+rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
+			const A3 a3, const A4 a4,
 			R & r))
 {
 	class h1 : public handler {
@@ -469,7 +475,7 @@ rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
 			S * sob;
 			int (S::*meth)(const A1 a1, const A2 a2, const A3 a3, const A4 a4, R & r);
 		public:
-			h1(S *xsob, int (S::*xmeth)(const A1 a1, const A2 a2, const A3 a3, 
+			h1(S *xsob, int (S::*xmeth)(const A1 a1, const A2 a2, const A3 a3,
 						const A4 a4, R & r))
 				: sob(xsob), meth(xmeth)  { }
 			int fn(unmarshall &args, marshall &ret) {
@@ -493,17 +499,17 @@ rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
 }
 
 template<class S, class A1, class A2, class A3, class A4, class A5, class R> void
-rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2, 
-			const A3 a3, const A4 a4, 
+rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
+			const A3 a3, const A4 a4,
 			const A5 a5, R & r))
 {
 	class h1 : public handler {
 		private:
 			S * sob;
-			int (S::*meth)(const A1 a1, const A2 a2, const A3 a3, const A4 a4, 
+			int (S::*meth)(const A1 a1, const A2 a2, const A3 a3, const A4 a4,
 					const A5 a5, R & r);
 		public:
-			h1(S *xsob, int (S::*xmeth)(const A1 a1, const A2 a2, const A3 a3, 
+			h1(S *xsob, int (S::*xmeth)(const A1 a1, const A2 a2, const A3 a3,
 						const A4 a4, const A5 a5, R & r))
 				: sob(xsob), meth(xmeth) { }
 			int fn(unmarshall &args, marshall &ret) {
@@ -529,18 +535,18 @@ rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
 }
 
 template<class S, class A1, class A2, class A3, class A4, class A5, class A6, class R> void
-rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2, 
-			const A3 a3, const A4 a4, 
-			const A5 a5, const A6 a6, 
+rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
+			const A3 a3, const A4 a4,
+			const A5 a5, const A6 a6,
 			R & r))
 {
 	class h1 : public handler {
 		private:
 			S * sob;
-			int (S::*meth)(const A1 a1, const A2 a2, const A3 a3, const A4 a4, 
+			int (S::*meth)(const A1 a1, const A2 a2, const A3 a3, const A4 a4,
 					const A5 a5, const A6 a6, R & r);
 		public:
-			h1(S *xsob, int (S::*xmeth)(const A1 a1, const A2 a2, const A3 a3, 
+			h1(S *xsob, int (S::*xmeth)(const A1 a1, const A2 a2, const A3 a3,
 						const A4 a4, const A5 a5, const A6 a6, R & r))
 				: sob(xsob), meth(xmeth) { }
 			int fn(unmarshall &args, marshall &ret) {
@@ -567,20 +573,20 @@ rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
 	reg1(proc, new h1(sob, meth));
 }
 
-template<class S, class A1, class A2, class A3, class A4, class A5, 
+template<class S, class A1, class A2, class A3, class A4, class A5,
 	class A6, class A7, class R> void
-rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2, 
-			const A3 a3, const A4 a4, 
+rpcs::reg(unsigned int proc, S*sob, int (S::*meth)(const A1 a1, const A2 a2,
+			const A3 a3, const A4 a4,
 			const A5 a5, const A6 a6,
 			const A7 a7, R & r))
 {
 	class h1 : public handler {
 		private:
 			S * sob;
-			int (S::*meth)(const A1 a1, const A2 a2, const A3 a3, const A4 a4, 
+			int (S::*meth)(const A1 a1, const A2 a2, const A3 a3, const A4 a4,
 					const A5 a5, const A6 a6, const A7 a7, R & r);
 		public:
-			h1(S *xsob, int (S::*xmeth)(const A1 a1, const A2 a2, const A3 a3, 
+			h1(S *xsob, int (S::*xmeth)(const A1 a1, const A2 a2, const A3 a3,
 						const A4 a4, const A5 a5, const A6 a6,
 						const A7 a7, R & r))
 				: sob(xsob), meth(xmeth) { }
