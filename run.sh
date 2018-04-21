@@ -24,8 +24,12 @@ case "$1" in
     "test")
         test::lock
         ;;
+    "testlossy")
+        export RPC_LOSSY=5
+        test::lock
+        ;;
     "rpctest")
-        ./rpc/rpctest
+        ./rpc/rpctest "$2"
         ;;
     "kill")
         killall lock_server

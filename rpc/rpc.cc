@@ -101,7 +101,7 @@ void set_rand_seed()
 
 rpcc::rpcc(sockaddr_in d, bool retrans) :
 	dst_(d), srv_nonce_(0), bind_done_(false), xid_(1), lossytest_(0),
-	retrans_(retrans), reachable_(true), chan_(NULL), destroy_wait_ (false), xid_rep_done_(-1)
+	retrans_(retrans), reachable_(true), chan_(NULL), destroy_wait_ (false)
 {
 	VERIFY(pthread_mutex_init(&m_, 0) == 0);
 	VERIFY(pthread_mutex_init(&chan_m_, 0) == 0);
@@ -192,7 +192,6 @@ rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 {
 
 	caller ca(0, &rep);
-        int xid_rep;
 	{
 		ScopedLock ml(&m_);
 
@@ -209,10 +208,8 @@ rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 		ca.xid = xid_++;
 		calls_[ca.xid] = &ca;
 
-		req_header h(ca.xid, proc, clt_nonce_, srv_nonce_,
-                             xid_rep_window_.front());
+		req_header h(ca.xid, proc, clt_nonce_, srv_nonce_, xid_rep_window_.front());
 		req.pack_req_header(h);
-                xid_rep = xid_rep_window_.front();
 	}
 
 	TO curr_to;
@@ -222,40 +219,26 @@ rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 	add_timespec(now, to.to, &finaldeadline);
 	curr_to.to = to_min.to;
 
-	bool transmit = true;
 	connection *ch = NULL;
 
-	while (1){
-		if(transmit){
-			get_refconn(&ch);
-			if(ch){
-			        if(reachable_) {
-                                        request forgot;
-                                        {
-                                                ScopedLock ml(&m_);
-                                                if (dup_req_.isvalid() && xid_rep_done_ > dup_req_.xid) {
-                                                        forgot = dup_req_;
-                                                        dup_req_.clear();
-                                                }
-                                        }
-                                        if (forgot.isvalid())
-                                                ch->send((char *)forgot.buf.c_str(), forgot.buf.size());
-                                        ch->send(req.cstr(), req.size());
-                                }
-				else jsl_log(JSL_DBG_1, "not reachable\n");
-				jsl_log(JSL_DBG_2,
-						"rpcc::call1 %u just sent req proc %x xid %u clt_nonce %d\n",
-						clt_nonce_, proc, ca.xid, clt_nonce_);
-			}
-			transmit = false; // only send once on a given channel
-		}
+	while (finaldeadline.tv_sec) {
+        VERIFY(reachable_);
 
-		if(!finaldeadline.tv_sec)
-			break;
+        get_refconn(&ch);
+        const auto sent = ch && ch->send(req.cstr(), req.size());
+        if (sent) {
+            jsl_log(JSL_DBG_2,
+                "rpcc::call1 %u just sent req proc %x xid %u clt_nonce %d\n",
+                    clt_nonce_, proc, ca.xid, clt_nonce_);
+        } else {
+            jsl_log(JSL_DBG_2,
+                "rpcc::call1 %u failed to send req proc %x xid %u clt_nonce %d\n",
+                    clt_nonce_, proc, ca.xid, clt_nonce_);
+        }
 
 		clock_gettime(CLOCK_REALTIME, &now);
 		add_timespec(now, curr_to.to, &nextdeadline);
-		if(cmp_timespec(nextdeadline,finaldeadline) > 0){
+		if (cmp_timespec(nextdeadline, finaldeadline) > 0) {
 			nextdeadline = finaldeadline;
 			finaldeadline.tv_sec = 0;
 		}
@@ -263,29 +246,23 @@ rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 		{
 			ScopedLock cal(&ca.m);
 			while (!ca.done){
-			        jsl_log(JSL_DBG_2, "rpcc:call1: wait\n");
-				if(pthread_cond_timedwait(&ca.c, &ca.m,
-                                                 &nextdeadline) == ETIMEDOUT){
+				if (pthread_cond_timedwait(&ca.c, &ca.m, &nextdeadline) == ETIMEDOUT) {
 				  	jsl_log(JSL_DBG_2, "rpcc::call1: timeout\n");
 					break;
 				}
 			}
-			if(ca.done){
-			        jsl_log(JSL_DBG_2, "rpcc::call1: reply received\n");
+
+			if (ca.done) {
+			    jsl_log(JSL_DBG_2, "rpcc::call1: reply received\n");
 				break;
 			}
 		}
 
-		if(retrans_ && (!ch || ch->isdead())){
-			// since connection is dead, retransmit
-                        // on the new connection
-			transmit = true;
-		}
 		curr_to.to <<= 1;
 	}
 
 	{
-                // no locking of ca.m since only this thread changes ca.xid
+        // no locking of ca.m since only this thread changes ca.xid
 		ScopedLock ml(&m_);
 		calls_.erase(ca.xid);
 		// may need to update the xid again here, in case the
@@ -297,17 +274,6 @@ rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 		  VERIFY(pthread_cond_signal(&destroy_wait_c_) == 0);
 		}
 	}
-
-        if (ca.done && lossytest_)
-        {
-                ScopedLock ml(&m_);
-                if (!dup_req_.isvalid()) {
-                        dup_req_.buf.assign(req.cstr(), req.size());
-                        dup_req_.xid = ca.xid;
-                }
-                if (xid_rep > xid_rep_done_)
-                        xid_rep_done_ = xid_rep;
-        }
 
 	ScopedLock cal(&ca.m);
 
@@ -590,14 +556,6 @@ rpcs::dispatch(djob_t *j)
 			}
 
 			rh.ret = f->fn(req, rep);
-                        if (rh.ret == rpc_const::unmarshal_args_failure) {
-                                fprintf(stderr, "rpcs::dispatch: failed to"
-                                       " unmarshall the arguments. You are"
-                                       " probably calling RPC 0x%x with wrong"
-                                       " types of arguments.\n", proc);
-                                VERIFY(0);
-                        }
-			VERIFY(rh.ret >= 0);
 
 			rep.pack_reply_header(rh);
 			rep.take_buf(&b1,&sz1);
@@ -659,7 +617,7 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 
     remove_received_reply(clt_nonce, xid_rep);
 
-    const auto state = try_retrieve_old(clt_nonce, xid);
+    const auto state = try_retrieve_old(clt_nonce, xid, b, sz);
     if (state != NEW) {
         return state;
     }
@@ -672,6 +630,13 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 // @pre reply_window_m_ locked
 void rpcs::remove_received_reply(unsigned int clt_nonce, unsigned int xid_rep)
 {
+    if (xid_rep < reply_window_begin_[clt_nonce]) {
+        return;
+    }
+
+    reply_window_begin_[clt_nonce] = xid_rep + 1;
+    reply_window_end_[clt_nonce] = std::max(reply_window_end_[clt_nonce], xid_rep + 1);
+
     auto iter = reply_window_.find(clt_nonce);
     if (iter == reply_window_.end()) {
         return;
@@ -690,35 +655,47 @@ void rpcs::remove_received_reply(unsigned int clt_nonce, unsigned int xid_rep)
 }
 
 // @pre reply_window_m_ locked
-rpcs::rpcstate_t rpcs::try_retrieve_old(const unsigned clt, const unsigned xid)
+rpcs::rpcstate_t rpcs::try_retrieve_old(const unsigned clt, const unsigned xid, char** bf, int* sz)
 {
+    if (xid < reply_window_begin_[clt]) {
+        return FORGOTTEN;
+    }
+
     auto iter = reply_window_.find(clt);
     if (iter == reply_window_.end() || iter->second.empty()) {
         return NEW;
     }
 
     auto replies = iter->second;
-    if (replies.front().xid > xid) {
-        return FORGOTTEN;
-    } else if (replies.back().xid < xid) {
-        return NEW;
-    } else {
-        auto reply_iter = std::find_if(replies.begin(), replies.end(), [xid](reply_t& r){
-            return r.xid == xid;
-        });
-        VERIFY(reply_iter != replies.end());
+    auto reply_iter = std::find_if(replies.begin(), replies.end(), [xid](reply_t& r){
+        return r.xid == xid;
+    });
 
-        if (reply_iter->cb_present) {
-            return DONE;
-        } else {
-            return INPROGRESS;
+    if (reply_iter == replies.end()) {
+        jsl_log(JSL_DBG_2, "newXid(client: %u, xid: %u)\n", clt, xid);
+        return NEW;
+    } else if (reply_iter->cb_present) {
+        jsl_log(JSL_DBG_2, "retrieveOld(client: %u, xid: %u): done\n", clt, xid);
+        if (bf) {
+            *bf = reply_iter->buf;
         }
+        if (sz) {
+            *sz = reply_iter->sz;
+        }
+        return DONE;
+    } else {
+        jsl_log(JSL_DBG_2, "retrieveOld(client: %u, xid: %u): inprogress\n", clt, xid);
+        return INPROGRESS;
     }
 }
 
 // @pre reply_window_m_ locked
 void rpcs::append_new_call(const unsigned clt, const unsigned xid)
 {
+    if (xid >= reply_window_end_[clt]) {
+        reply_window_end_[clt] = xid + 1;
+    }
+
     reply_window_[clt].emplace_back(xid);
 }
 
@@ -728,8 +705,7 @@ void rpcs::append_new_call(const unsigned clt, const unsigned xid)
 // free_reply_window() and checkduplicate_and_update is responsible for
 // calling free(b).
 void
-rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
-		char *b, int sz)
+rpcs::add_reply(unsigned int clt_nonce, unsigned int xid, char *b, int sz)
 {
 	ScopedLock rwl(&reply_window_m_);
 
@@ -745,6 +721,8 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
     reply_iter->cb_present = true;
     reply_iter->buf = b;
     reply_iter->sz = sz;
+
+    jsl_log(JSL_DBG_2, "rpcs::add_reply: client: %u, xid: %u\n", clt_nonce, xid);
 }
 
 void

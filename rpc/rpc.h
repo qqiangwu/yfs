@@ -73,15 +73,6 @@ class rpcc : public chanmgr {
 		std::map<int, caller *> calls_;
 		std::list<unsigned int> xid_rep_window_;
 
-                struct request {
-                    request() { clear(); }
-                    void clear() { buf.clear(); xid = -1; }
-                    bool isvalid() { return xid != -1; }
-                    std::string buf;
-                    int xid;
-                };
-                struct request dup_req_;
-                int xid_rep_done_;
 	public:
 
 		rpcc(sockaddr_in d, bool retrans=true);
@@ -263,7 +254,6 @@ class handler {
 		virtual int fn(unmarshall &, marshall &) = 0;
 };
 
-
 // rpc server endpoint.
 class rpcs : public chanmgr {
 
@@ -295,6 +285,8 @@ class rpcs : public chanmgr {
 	// provide at most once semantics by maintaining a window of replies
 	// per client that that client hasn't acknowledged receiving yet.
 	std::map<unsigned int, std::list<reply_t> > reply_window_;
+    std::map<unsigned int, unsigned> reply_window_begin_;
+    std::map<unsigned int, unsigned> reply_window_end_;
 
 	void free_reply_window(void);
 	void add_reply(unsigned int clt_nonce, unsigned int xid, char *b, int sz);
@@ -304,7 +296,7 @@ class rpcs : public chanmgr {
 			char **b, int *sz);
 
     void remove_received_reply(unsigned int clt_nonce, unsigned int xid);
-    rpcstate_t try_retrieve_old(unsigned int clt_nonce, unsigned int xid);
+    rpcstate_t try_retrieve_old(unsigned int clt_nonce, unsigned int xid, char** buf, int* sz);
     void append_new_call(unsigned int clt_nonce, unsigned int xid);
 
 	void updatestat(unsigned int proc);

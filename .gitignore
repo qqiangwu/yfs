@@ -7,3 +7,4 @@ lock_tester
 *.a
 rpc/rpctest
 .tmp
+*.log
