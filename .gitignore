@@ -1,0 +1,10 @@
+tags
+*.d
+*.o
+lock_demo
+lock_server
+lock_tester
+*.a
+rpc/rpctest
+.tmp
+*.log

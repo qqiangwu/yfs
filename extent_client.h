@@ -4,23 +4,35 @@
 #define extent_client_h
 
 #include <string>
+#include <stdexcept>
+#include <optional>
+#include <memory>
 #include "extent_protocol.h"
 #include "rpc.h"
 
-class extent_client {
- private:
-  rpcc *cl;
+namespace yfs {
 
- public:
-  extent_client(std::string dst);
-
-  extent_protocol::status get(extent_protocol::extentid_t eid, 
-			      std::string &buf);
-  extent_protocol::status getattr(extent_protocol::extentid_t eid, 
-				  extent_protocol::attr &a);
-  extent_protocol::status put(extent_protocol::extentid_t eid, std::string buf);
-  extent_protocol::status remove(extent_protocol::extentid_t eid);
+class Io_error : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
 };
 
-#endif 
+// strong guarantee
+// @throws Io_error if failed to connect server
+class extent_client {
+public:
+    // @throws std::invalid_argument
+    extent_client(const std::string& addr);
 
+    std::optional<std::string> get(extent_protocol::extentid_t eid);
+    std::optional<extent_protocol::attr> getattr(extent_protocol::extentid_t eid);
+    void put(extent_protocol::extentid_t eid, const std::string& buf);
+    void remove(extent_protocol::extentid_t eid);
+
+private:
+    std::unique_ptr<rpcc> rpc_;
+};
+
+}
+
+#endif

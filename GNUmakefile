@@ -7,7 +7,7 @@ LAB4GE=$(shell expr $(LAB) \>\= 4)
 LAB5GE=$(shell expr $(LAB) \>\= 5)
 LAB6GE=$(shell expr $(LAB) \>\= 6)
 LAB7GE=$(shell expr $(LAB) \>\= 7)
-CXXFLAGS =  -g -MMD -Wall -I. -I$(RPC) -DLAB=$(LAB) -DSOL=$(SOL) -D_FILE_OFFSET_BITS=64
+CXXFLAGS =  -g -std=c++17 -MMD -Wall -I. -I$(RPC) -DLAB=$(LAB) -DSOL=$(SOL) -D_FILE_OFFSET_BITS=64 -Wfatal-errors
 FUSEFLAGS= -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=25 -I/usr/local/include/fuse -I/usr/include/fuse
 ifeq ($(shell uname -s),Darwin)
   MACFLAGS= -D__FreeBSD__=10
@@ -86,7 +86,7 @@ endif
 
 lock_server : $(patsubst %.cc,%.o,$(lock_server)) rpc/librpc.a
 
-yfs_client=yfs_client.cc extent_client.cc fuse.cc
+yfs_client=yfs_client.cc extent_client.cc fuse.cc log.cc
 ifeq ($(LAB3GE),1)
   yfs_client += lock_client.cc
 endif
@@ -98,7 +98,7 @@ ifeq ($(LAB4GE),1)
 endif
 yfs_client : $(patsubst %.cc,%.o,$(yfs_client)) rpc/librpc.a
 
-extent_server=extent_server.cc extent_smain.cc
+extent_server=extent_server.cc extent_smain.cc log.cc
 extent_server : $(patsubst %.cc,%.o,$(extent_server)) rpc/librpc.a
 
 test-lab-3-b=test-lab-3-b.c
