@@ -328,29 +328,40 @@ void fuseserver_open(fuse_req_t req, fuse_ino_t ino,
 void fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
      mode_t mode)
 {
-  struct fuse_entry_param e;
-  // In yfs, timeouts are always set to 0.0, and generations are always set to 0
-  e.attr_timeout = 0.0;
-  e.entry_timeout = 0.0;
-  e.generation = 0;
-  // Suppress compiler warning of unused e.
-  (void) e;
+    YLOG_INFO("fuse.mkdir(parent: %u, name: %s, mode: %u)",
+            unsigned(parent),
+            name,
+            unsigned(mode));
 
-  // You fill this in for Lab 3
-#if 0
-  fuse_reply_entry(req, &e);
-#else
-  fuse_reply_err(req, ENOSYS);
-#endif
+    run(req, [&]{
+        struct fuse_entry_param e;
+
+        auto inode = fs->mkdir(parent, name);
+
+        e.attr_timeout = 0.0;
+        e.entry_timeout = 0.0;
+        e.generation = 0;
+        e.ino = fuse_ino_t(inode);
+        e.attr = getattr(inode);
+
+        fuse_reply_entry(req, &e);
+    });
 }
 
 void fuseserver_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
+    YLOG_INFO("fuse.unlink(parent: %llu, name: %s)", yfs::inum_t(parent), name);
 
-  // You fill this in for Lab 3
-  // Success:	fuse_reply_err(req, 0);
-  // Not found:	fuse_reply_err(req, ENOENT);
-  fuse_reply_err(req, ENOSYS);
+    run(req, [&]{
+        yfs::inum_t inum = parent;
+        const auto ok = fs->unlink(inum, std::string_view(name));
+        if (ok) {
+            fuse_reply_err(req, 0);
+        } else {
+            YLOG_WARN("fuse.unlink(failed: no_entry, parent: %llu, name: %s)", inum, name);
+            fuse_reply_err(req, ENOENT);
+        }
+    });
 }
 
 void fuseserver_statfs(fuse_req_t req)

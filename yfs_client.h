@@ -118,6 +118,7 @@ public:
     std::optional<inum_t> lookup(const std::string& name);
 
     void insert(const std::string& name, inum_t inum);
+    void remove(const std::string_view name);
 
     dirinfo getdir();
 
@@ -149,8 +150,11 @@ public:
     std::optional<dirinfo>  getdir(inum_t inode);
 
     inum_t create(inum_t parent, const std::string& name);
+    inum_t mkdir(inum_t parent, const std::string& name);
 
     std::optional<inum_t> lookup(inum_t parent, const std::string& name);
+
+    bool unlink(inum_t parent, const std::string_view name);
 
     // @pre offset >= 0
     // @pre limit >= 0

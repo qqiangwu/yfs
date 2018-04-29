@@ -233,6 +233,14 @@ void Dir_block::insert(const std::string& name, const inum_t inum)
     dirty_ = true;
 }
 
+void Dir_block::remove(const std::string_view name)
+{
+    const auto erased = children_.erase(std::string(name));
+    if (erased > 0) {
+        dirty_ = true;
+    }
+}
+
 dirinfo Dir_block::getdir()
 {
     auto attropt = client_.getattr(eid_);
@@ -356,6 +364,49 @@ inum_t yfs_client::create(const inum_t parent, const std::string& name)
     return inode;
 }
 
+inum_t yfs_client::mkdir(const inum_t parent, const std::string& name)
+{
+    YLOG_INFO("mkdir(parent: %llu, name: %s)", parent, name.c_str());
+
+    auto sb = get_super_block_();
+    auto dir = get_dir_(parent);
+    if (!dir) {
+        throw No_entry_error{std::to_string(parent)};
+    }
+
+    const auto inode = sb.alloc_inum(Super_block::dir);
+    auto newdir = Dir_block(*extent_client_, inode);
+    dir->insert(name, inode);
+
+    sb.commit();
+    newdir.commit();
+    dir->commit();
+
+    return inode;
+}
+
+bool yfs_client::unlink(const inum_t parent, const std::string_view name)
+{
+    YLOG_INFO("unlink(parent: %llu, name: %s)", parent, name.data());
+
+    auto dir = get_dir_(parent);
+    if (!dir) {
+        throw No_entry_error{std::to_string(parent)};
+    }
+
+    const auto entry = dir->lookup(std::string(name));
+    if (!entry) {
+        YLOG_INFO("unlink(parent: %llu, name: %s): no entry", parent, name.data());
+        return false;
+    } else {
+        YLOG_INFO("unlink(parent: %llu, name: %s): done", parent, name.data());
+        dir->remove(name);
+        dir->commit();
+        extent_client_->remove(*entry);
+        return true;
+    }
+}
+
 std::optional<inum_t> yfs_client::lookup(const inum_t parent, const std::string& name)
 {
     YLOG_INFO("lookup(parent: %llu, name: %s)", parent, name.c_str());
@@ -414,7 +465,10 @@ int yfs_client::write(const inum_t inum, int offset, const std::string_view cont
         throw No_entry_error{std::to_string(inum)};
     }
 
-    return file->write(offset, content);
+    const auto n = file->write(offset, content);
+
+    file->commit();
+    return n;
 }
 
 Super_block yfs_client::get_super_block_()
