@@ -7,6 +7,7 @@
 #include <memory>
 #include <stdexcept>
 #include "extent_client.h"
+#include "lock_client.h"
 
 namespace yfs {
 
@@ -176,6 +177,26 @@ private:
 
 private:
     const std::unique_ptr<extent_client> extent_client_;
+    const std::unique_ptr<lock_client>   lock_client_;
+};
+
+class Duplicate_lock_error : std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+// @throws Io_error if communication fails.
+class Multi_lock {
+public:
+    explicit Multi_lock(lock_client& client);
+    ~Multi_lock();
+
+    // @throws Duplicate_lock_error if double lock
+    void add_lock(lock_protocol::lockid_t lock);
+
+private:
+    lock_client&                         client_;
+    std::vector<lock_protocol::lockid_t> locks_;
 };
 
 }

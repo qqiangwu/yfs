@@ -26,9 +26,9 @@ inline void ylog_set_level(const YLog_level level)
 	} while(0)
 
 
-#define YLOG_DEBUG(...) _YLOG_IMPL(YLog_level::debug, __VA_ARGS__)
-#define YLOG_INFO(...) _YLOG_IMPL(YLog_level::info, __VA_ARGS__)
-#define YLOG_WARN(...) _YLOG_IMPL(YLog_level::warn, __VA_ARGS__)
-#define YLOG_ERROR(...) _YLOG_IMPL(YLog_level::error, __VA_ARGS__)
+#define YLOG_DEBUG(format, ...) _YLOG_IMPL(YLog_level::debug, "[debug] " format, __VA_ARGS__)
+#define YLOG_INFO(format, ...) _YLOG_IMPL(YLog_level::info, "[info] " format, __VA_ARGS__)
+#define YLOG_WARN(format, ...) _YLOG_IMPL(YLog_level::warn, "[warn] " format, __VA_ARGS__)
+#define YLOG_ERROR(format, ...) _YLOG_IMPL(YLog_level::error, "[error] " format, __VA_ARGS__)
 
 #endif

@@ -1,5 +1,6 @@
 // yfs client.  implements FS operations using extent and lock server
 #include <sstream>
+#include <algorithm>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -114,12 +115,10 @@ int File_block::write(const int offset, const std::string_view content)
 {
     assert(offset >= 0);
 
-    if (content.empty()) {
-        return 0;
-    }
-
     const auto new_len = offset + content.size();
-    extent_.resize(new_len);
+    if (new_len > extent_.size()) {
+        extent_.resize(new_len);
+    }
     std::copy(content.begin(), content.end(), extent_.begin() + offset);
 
     dirty_ = true;
@@ -225,7 +224,7 @@ void Dir_block::insert(const std::string& name, const inum_t inum)
 
     auto iter = children_.find(name);
     if (iter != children_.end()) {
-        YLOG_ERROR("dir.insertFailed(name: %s, inum: %u)", name.c_str(), unsigned(inum));
+        YLOG_ERROR("dir.insert(result: failed, name: %s, inum: %llu)", name.c_str(), inum);
         throw Already_exist_error{"dir entry exists"};
     }
 
@@ -286,7 +285,8 @@ std::string Dir_block::encode_()
 ///////////////////////////////////////////////////
 // Facade layer
 yfs_client::yfs_client(const std::string& extent_dst, const std::string& lock_dst)
-    : extent_client_(new extent_client(extent_dst))
+    : extent_client_(new extent_client(extent_dst)),
+      lock_client_(new lock_client(lock_dst))
 {
     YLOG_INFO("Yfs(extent: %s): setup", extent_dst.c_str());
     load_or_init_fs_();
@@ -327,7 +327,7 @@ bool yfs_client::isdir(const inum_t inum)
 
 std::optional<fileinfo> yfs_client::getfile(const inum_t inum)
 {
-    YLOG_INFO("getfile(inum: %llu)", inum);
+    YLOG_INFO("fs.getfile(inum: %llu)", inum);
 
     auto file = get_file_(inum);
 
@@ -336,7 +336,7 @@ std::optional<fileinfo> yfs_client::getfile(const inum_t inum)
 
 std::optional<dirinfo> yfs_client::getdir(const inum_t inum)
 {
-    YLOG_INFO("getdir(inum: %llu)", inum);
+    YLOG_INFO("fs.getdir(inum: %llu)", inum);
 
     auto dir = get_dir_(inum);
 
@@ -345,12 +345,21 @@ std::optional<dirinfo> yfs_client::getdir(const inum_t inum)
 
 inum_t yfs_client::create(const inum_t parent, const std::string& name)
 {
-    YLOG_INFO("create(parent: %llu, name: %s)", parent, name.c_str());
+    YLOG_INFO("fs.create(parent: %llu, name: %s)", parent, name.c_str());
+
+    Multi_lock lock(*lock_client_);
+    lock.add_lock(super_block_id);
+    lock.add_lock(parent);
 
     auto sb = get_super_block_();
     auto dir = get_dir_(parent);
     if (!dir) {
+        YLOG_ERROR("fs.create(reason: notfound, parent: %llu)", parent);
         throw No_entry_error{std::to_string(parent)};
+    }
+    if (dir->lookup(name)) {
+        YLOG_ERROR("fs.create(reason: exist, parent: %llu, name: %s)", parent, name);
+        throw Already_exist_error{"file exist: " + name};
     }
 
     const auto inode = sb.alloc_inum(Super_block::file);
@@ -366,11 +375,16 @@ inum_t yfs_client::create(const inum_t parent, const std::string& name)
 
 inum_t yfs_client::mkdir(const inum_t parent, const std::string& name)
 {
-    YLOG_INFO("mkdir(parent: %llu, name: %s)", parent, name.c_str());
+    YLOG_INFO("fs.mkdir(parent: %llu, name: %s)", parent, name.c_str());
+
+    Multi_lock lock(*lock_client_);
+    lock.add_lock(super_block_id);
+    lock.add_lock(parent);
 
     auto sb = get_super_block_();
     auto dir = get_dir_(parent);
     if (!dir) {
+        YLOG_ERROR("fs.mkdir(badFD: %llu, name: %s)", parent);
         throw No_entry_error{std::to_string(parent)};
     }
 
@@ -387,7 +401,11 @@ inum_t yfs_client::mkdir(const inum_t parent, const std::string& name)
 
 bool yfs_client::unlink(const inum_t parent, const std::string_view name)
 {
-    YLOG_INFO("unlink(parent: %llu, name: %s)", parent, name.data());
+    YLOG_INFO("fs.unlink(parent: %llu, name: %s)", parent, name.data());
+
+    Multi_lock lock(*lock_client_);
+    lock.add_lock(super_block_id);
+    lock.add_lock(parent);
 
     auto dir = get_dir_(parent);
     if (!dir) {
@@ -396,10 +414,12 @@ bool yfs_client::unlink(const inum_t parent, const std::string_view name)
 
     const auto entry = dir->lookup(std::string(name));
     if (!entry) {
-        YLOG_INFO("unlink(parent: %llu, name: %s): no entry", parent, name.data());
+        YLOG_INFO("fs.unlink(parent: %llu, name: %s): no entry", parent, name.data());
         return false;
     } else {
-        YLOG_INFO("unlink(parent: %llu, name: %s): done", parent, name.data());
+        YLOG_INFO("fs.unlink(parent: %llu, name: %s): done", parent, name.data());
+        lock.add_lock(*entry);
+
         dir->remove(name);
         dir->commit();
         extent_client_->remove(*entry);
@@ -409,10 +429,14 @@ bool yfs_client::unlink(const inum_t parent, const std::string_view name)
 
 std::optional<inum_t> yfs_client::lookup(const inum_t parent, const std::string& name)
 {
-    YLOG_INFO("lookup(parent: %llu, name: %s)", parent, name.c_str());
+    YLOG_INFO("fs.lookup(parent: %llu, name: %s)", parent, name.c_str());
+
+    Multi_lock lock(*lock_client_);
+    lock.add_lock(parent);
 
     auto dir = get_dir_(parent);
     if (!dir) {
+        YLOG_ERROR("fs.lookup(bddFD: %llu)", parent);
         throw No_entry_error{std::to_string(parent)};
     }
 
@@ -421,10 +445,14 @@ std::optional<inum_t> yfs_client::lookup(const inum_t parent, const std::string&
 
 std::vector<dirent> yfs_client::readdir(const inum_t parent, int offset, int limit)
 {
-    YLOG_INFO("readdir(parent: %llu, offset: %d, limit: %d)", parent, offset, limit);
+    YLOG_INFO("fs.readdir(parent: %llu, offset: %d, limit: %d)", parent, offset, limit);
+
+    Multi_lock lock(*lock_client_);
+    lock.add_lock(parent);
 
     auto dir = get_dir_(parent);
     if (!dir) {
+        YLOG_ERROR("fs.readdir(bddFD: %llu)", parent);
         throw No_entry_error{std::to_string(parent)};
     }
 
@@ -433,10 +461,14 @@ std::vector<dirent> yfs_client::readdir(const inum_t parent, int offset, int lim
 
 void yfs_client::setattr(const inum_t inum, const unsigned long long size)
 {
-    YLOG_INFO("setattr(inum: %llu)", inum);
+    YLOG_INFO("fs.setattr(inum: %llu)", inum);
+
+    Multi_lock lock(*lock_client_);
+    lock.add_lock(inum);
 
     auto file = get_file_(inum);
     if (!file) {
+        YLOG_ERROR("fs.setattr(badFD: %llu)", inum);
         throw No_entry_error{std::to_string(inum)};
     }
 
@@ -446,10 +478,14 @@ void yfs_client::setattr(const inum_t inum, const unsigned long long size)
 
 std::string yfs_client::read(const inum_t inum, int offset, int limit)
 {
-    YLOG_INFO("read(inum: %llu, offset: %d, limit: %d)", inum, offset, limit);
+    YLOG_INFO("fs.read(inum: %llu, offset: %d, limit: %d)", inum, offset, limit);
+
+    Multi_lock lock(*lock_client_);
+    lock.add_lock(inum);
 
     auto file = get_file_(inum);
     if (!file) {
+        YLOG_ERROR("fs.read(badFD: %llu)", inum);
         throw No_entry_error{std::to_string(inum)};
     }
 
@@ -458,10 +494,14 @@ std::string yfs_client::read(const inum_t inum, int offset, int limit)
 
 int yfs_client::write(const inum_t inum, int offset, const std::string_view content)
 {
-    YLOG_INFO("write(inum: %llu, offset: %d, size: %u)", inum, unsigned(offset), unsigned(content.size()));
+    YLOG_INFO("fs.write(inum: %llu, offset: %d, size: %u)", inum, unsigned(offset), unsigned(content.size()));
+
+    Multi_lock lock(*lock_client_);
+    lock.add_lock(inum);
 
     auto file = get_file_(inum);
     if (!file) {
+        YLOG_ERROR("fs.write(badFD: %llu)", inum);
         throw No_entry_error{std::to_string(inum)};
     }
 
@@ -494,4 +534,40 @@ std::optional<Dir_block>  yfs_client::get_dir_(inum_t inum)
     auto content = extent_client_->get(inum);
 
     return content? std::optional(Dir_block{*extent_client_, inum, content.value()}): std::nullopt;
+}
+
+/////////////////////////////////////////////////
+// Lock
+Multi_lock::Multi_lock(lock_client& client)
+    : client_(client)
+{
+}
+
+Multi_lock::~Multi_lock()
+{
+    std::reverse(locks_.begin(), locks_.end());
+
+    for (const auto lock: locks_) {
+        const auto rc = client_.release(lock);
+        if (rc != lock_protocol::OK) {
+            YLOG_ERROR("Multi_lock.release(failed: %llu, lock: %llu)", rc, lock);
+        }
+    }
+}
+
+void Multi_lock::add_lock(const lock_protocol::lockid_t lock)
+{
+    auto iter = std::find(locks_.begin(), locks_.end(), lock);
+    if (iter != locks_.end()) {
+        YLOG_ERROR("lock.dup(lock: %llu)", lock);
+        throw Duplicate_lock_error{std::to_string(lock)};
+    }
+
+    const auto rc = client_.acquire(lock);
+    if (rc != lock_protocol::OK) {
+        YLOG_ERROR("lock.failed(lock: %llu, reason: %d)", lock, int(rc));
+        throw Io_error{"lock failed: " + std::to_string(lock)};
+    }
+
+    locks_.push_back(lock);
 }

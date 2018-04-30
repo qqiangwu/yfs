@@ -38,6 +38,9 @@ try {
 } catch (yfs::Already_exist_error& e) {
     YLOG_ERROR("error(exist: %s)", e.what());
     fuse_reply_err(req, EEXIST);
+} catch (std::logic_error& e) {
+    YLOG_ERROR("logic_error(%s)", e.what());
+    std::terminate();
 } catch (std::exception& e) {
     YLOG_ERROR("error(unknown: %s)", e.what());
     fuse_reply_err(req, EIO);
