@@ -198,11 +198,6 @@ void fuseserver_write(fuse_req_t req, fuse_ino_t ino,
 // - Create an empty extent for ino.
 // - Add a <name, ino> entry into @parent.
 // - On success, store the inum of newly created file into @e->ino,
-//   and the new file's attribute into @e->attr. Get the file's
-//   attributes with getattr().
-//
-// @return yfs_client::OK on success, and EXIST if @name already exists.
-//
 void fuseserver_create(fuse_req_t req, fuse_ino_t parent, const char *name,
    mode_t mode, struct fuse_file_info *fi)
 {
@@ -468,7 +463,6 @@ try {
   fuse_session_add_chan(se, ch);
   // err = fuse_session_loop_mt(se);   // FK: wheelfs does this; why?
   err = fuse_session_loop(se);
-
   fuse_session_destroy(se);
   close(fd);
   fuse_unmount(mountpoint);
